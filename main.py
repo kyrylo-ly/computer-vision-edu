@@ -1,4 +1,5 @@
 """Command-line entrypoint for the computer vision demo."""
+# Supports Lab 1-4 still-image + video pipeline and Lab 5 face recognition.
 
 from __future__ import annotations
 
@@ -65,6 +66,32 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run only the image pipeline.",
     )
+    parser.add_argument(
+        "--lab5",
+        action="store_true",
+        help=(
+            "Run the Lab 5 face-recognition pipeline "
+            "(classical ML + CNN). Skips the still-image and video pipelines."
+        ),
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default=None,
+        metavar="DIR",
+        help=(
+            "Path to a face dataset directory for --lab5. "
+            "Each sub-folder should contain images of one identity. "
+            "If omitted, a small synthetic dataset is generated automatically."
+        ),
+    )
+    parser.add_argument(
+        "--cnn-epochs",
+        type=int,
+        default=20,
+        metavar="N",
+        help="Maximum training epochs for the CNN in --lab5 (default: 20).",
+    )
     return parser
 
 
@@ -81,6 +108,15 @@ def main() -> int:
 
     parser = build_parser()
     args = parser.parse_args()
+
+    # ---- Lab 5: face recognition (classical ML + CNN) -------------------
+    if args.lab5:
+        # CVPipeline.__init__ accepts image_path=None, so no image is needed.
+        CVPipeline().run_lab5_pipeline(
+            dataset_dir=args.dataset,
+            cnn_epochs=args.cnn_epochs,
+        )
+        return 0
 
     if args.image is None and args.skip_video:
         parser.error("Provide --image when using --skip-video.")

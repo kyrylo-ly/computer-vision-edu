@@ -7,6 +7,8 @@ from typing import Optional
 
 import cv2
 
+from .classical_recognition import ClassicalFaceRecognizer
+from .cnn_recognition import CNNFaceRecognizer
 from .enhancement import ContrastEnhancer
 from .face_recognition import FaceDetector, FaceRecognizer
 from .feature_report import ImageAnalysisReport
@@ -237,3 +239,123 @@ class CVPipeline:
             morph_improved_mask=improved_mask,
         )
 
+    # ------------------------------------------------------------------
+    # Lab 5 pipeline
+    # ------------------------------------------------------------------
+
+    def run_lab5_pipeline(
+        self,
+        dataset_dir: Optional[str] = None,
+        cnn_epochs: int = 20,
+        test_size: float = 0.25,
+    ) -> dict:
+        """Execute Lab 5: classical ML + CNN face recognition.
+
+        When *dataset_dir* is provided the recognizers are trained on real
+        face images (one sub-folder per identity).  When it is ``None`` the
+        method generates a small synthetic dataset so the full pipeline can
+        be demonstrated and verified without external data.
+
+        Parameters
+        ----------
+        dataset_dir:
+            Path to a directory whose sub-folders each contain face images
+            of one identity.  Pass ``None`` to use synthetic data.
+        cnn_epochs:
+            Maximum number of training epochs for the CNN.
+        test_size:
+            Fraction of images reserved for evaluation.
+
+        Returns
+        -------
+        dict
+            Keys ``"classical_report"`` and ``"cnn_history"`` with the
+            corresponding result objects.
+        """
+        import tempfile, shutil, pathlib
+        import numpy as np
+
+        synthetic = dataset_dir is None
+        tmp_dir = None
+
+        if synthetic:
+            print("No dataset_dir provided — generating synthetic face data …")
+            tmp_dir = tempfile.mkdtemp(prefix="cv_lab5_")
+            dataset_dir = tmp_dir
+            _make_synthetic_dataset(tmp_dir, n_classes=4, images_per_class=20)
+            print(f"  Synthetic dataset written to {tmp_dir}")
+
+        results: dict = {}
+
+        # ---- Week 9: Classical classifiers --------------------------------
+        print("\n=== Lab 5 / Week 9: Classical ML Face Recognition ===")
+        classical = ClassicalFaceRecognizer(target_size=(64, 64))
+        try:
+            report = classical.train_from_directory(
+                dataset_dir, test_size=test_size
+            )
+            print(report.summary())
+            results["classical_report"] = report
+        except Exception as exc:
+            print(f"Classical pipeline error: {exc}")
+            results["classical_report"] = None
+
+        # ---- Week 10: CNN -------------------------------------------------
+        print("\n=== Lab 5 / Week 10: CNN Face Recognition ===")
+        cnn = CNNFaceRecognizer(input_size=(64, 64))
+        try:
+            history = cnn.train_from_directory(
+                dataset_dir,
+                epochs=cnn_epochs,
+                test_size=test_size,
+            )
+            cnn.plot_history()
+            results["cnn_history"] = history
+        except Exception as exc:
+            print(f"CNN pipeline error: {exc}")
+            results["cnn_history"] = None
+
+        if tmp_dir is not None:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+        return results
+
+
+# ---------------------------------------------------------------------------
+# Synthetic dataset helper
+# ---------------------------------------------------------------------------
+
+def _make_synthetic_dataset(
+    root: str,
+    n_classes: int = 4,
+    images_per_class: int = 20,
+    image_size: int = 96,
+) -> None:
+    """Write random grey face-like patches to a temporary directory.
+
+    Each class gets a deterministic base colour so the classifiers have a
+    learnable signal even though the images are noise.
+    """
+    import os
+    import cv2
+    import numpy as np
+
+    rng = np.random.default_rng(0)
+    for cls_id in range(n_classes):
+        cls_dir = os.path.join(root, f"person_{cls_id:02d}")
+        os.makedirs(cls_dir, exist_ok=True)
+        base = int(40 + cls_id * 50)
+        for img_idx in range(images_per_class):
+            patch = rng.integers(
+                max(0, base - 30), min(255, base + 30),
+                size=(image_size, image_size), dtype=np.uint8,
+            )
+            # Add a rough ellipse to mimic a face silhouette
+            cx, cy = image_size // 2, image_size // 2
+            cv2.ellipse(
+                patch, (cx, cy),
+                (cx - 10, cy - 8), 0, 0, 360,
+                color=int(np.clip(base + 20, 0, 255)), thickness=-1,
+            )
+            out_path = os.path.join(cls_dir, f"img_{img_idx:03d}.png")
+            cv2.imwrite(out_path, patch)
