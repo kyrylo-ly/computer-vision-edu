@@ -11,7 +11,9 @@ from .enhancement import ContrastEnhancer
 from .face_recognition import FaceDetector, FaceRecognizer
 from .feature_report import ImageAnalysisReport
 from .features import FeatureExtractor, HumanDetector
+from .geometry import GeometricTransformer
 from .image_io import ImageLoader
+from .morphology import MorphologyProcessor
 from .preprocessing import ImagePreprocessor
 from .segmentation import Segmenter
 from .visualization import Visualizer
@@ -34,6 +36,14 @@ class PipelineOutputs:
     face_overlay: object
     face_boxes: object
     report: ImageAnalysisReport
+    # Lab 4 – geometry outputs
+    scaled_down: object
+    scaled_up: object
+    rotated: object
+    perspective_demo: object
+    # Lab 4 – morphology outputs
+    morph_comparison: object
+    morph_improved_mask: object
 
 
 class CVPipeline:
@@ -82,6 +92,92 @@ class CVPipeline:
         if self.face_recognizer is not None and self.face_recognizer.available:
             _, face_overlay = self.face_recognizer.predict(image)
 
+        # ----------------------------------------------------------------
+        # Lab 4, Week 7 – Geometric transformations
+        # ----------------------------------------------------------------
+        print("\n--- Lab 4 / Week 7: Geometric Transformations ---")
+
+        scale_down = GeometricTransformer.scale_by_factor(image, 0.5, 0.5, "area")
+        scale_up   = GeometricTransformer.scale_by_factor(image, 1.5, 1.5, "cubic")
+        print(
+            f"Scale ×0.5 (AREA):  {scale_down.original_size} → {scale_down.new_size}"
+        )
+        print(
+            f"Scale ×1.5 (CUBIC): {scale_up.original_size} → {scale_up.new_size}"
+        )
+
+        rotation_result = GeometricTransformer.rotate(image, angle_deg=15, expand=True)
+        print(f"Rotation +15°: output size = {rotation_result.image.shape[:2][::-1]}"
+              f", center = {rotation_result.center}")
+
+        distorted, corrected = GeometricTransformer.demo_perspective(image)
+        print("Perspective demo: distorted + corrected images generated.")
+
+        # If any faces were detected, also warp the first face crop
+        perspective_face = None
+        if face_boxes:
+            persp_result = GeometricTransformer.correct_face_perspective(
+                image, face_boxes[0]
+            )
+            perspective_face = persp_result.image
+            print(f"Face perspective crop size: {perspective_face.shape[:2][::-1]}")
+
+        Visualizer.plot_image_grid(
+            [
+                image,
+                scale_down.image,
+                scale_up.image,
+                rotation_result.image,
+                distorted.image,
+                corrected.image,
+            ],
+            [
+                "Original",
+                "Scale ×0.5 (AREA)",
+                "Scale ×1.5 (CUBIC)",
+                "Rotation +15° (expand)",
+                "Perspective distorted",
+                "Perspective corrected",
+            ],
+            cols=2,
+            figsize=(16, 14),
+        )
+
+        # ----------------------------------------------------------------
+        # Lab 4, Week 8 – Morphological operations
+        # ----------------------------------------------------------------
+        print("\n--- Lab 4 / Week 8: Morphological Operations ---")
+
+        morph_comparison = MorphologyProcessor.compare_operations(
+            otsu_mask, kernel_size=5, kernel_shape="ellipse", iterations=2
+        )
+        for r in morph_comparison.results:
+            print(
+                f"{r.operation.capitalize():<10} kernel={r.kernel_size}×{r.kernel_size}"
+                f" ({r.kernel_shape}) ×{r.iterations}"
+            )
+
+        improved_mask, improve_comparison = MorphologyProcessor.improve_segmentation(
+            otsu_mask, open_kernel=3, close_kernel=7, kernel_shape="ellipse"
+        )
+        print("Segmentation cleaned with open→close pipeline.")
+
+        Visualizer.plot_image_grid(
+            morph_comparison.as_image_list(),
+            morph_comparison.as_title_list(),
+            cols=3,
+            figsize=(18, 10),
+        )
+        Visualizer.plot_image_grid(
+            improve_comparison.as_image_list(),
+            ["Raw Otsu mask", "After Opening (noise removal)", "After Closing (hole fill)"],
+            cols=3,
+            figsize=(18, 6),
+        )
+
+        # ----------------------------------------------------------------
+        # Original visualisation grids (Labs 1-3)
+        # ----------------------------------------------------------------
         Visualizer.plot_image_grid(
             [image, denoised, sharpened, equalized, clahe],
             ["Original", "Denoised", "Sharpened", "Global Equalization", "CLAHE"],
@@ -133,5 +229,11 @@ class CVPipeline:
             face_overlay=face_overlay,
             face_boxes=face_boxes,
             report=report,
+            scaled_down=scale_down.image,
+            scaled_up=scale_up.image,
+            rotated=rotation_result.image,
+            perspective_demo=corrected.image,
+            morph_comparison=morph_comparison,
+            morph_improved_mask=improved_mask,
         )
 

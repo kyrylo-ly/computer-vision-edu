@@ -3,7 +3,9 @@
 from .enhancement import ContrastEnhancer, compute_brightness_histogram
 from .face_recognition import FaceDetector, FaceRecognizer
 from .features import FeatureExtractor, HumanDetector
+from .geometry import GeometricTransformer
 from .image_io import ImageLoader, ImageMetadata
+from .morphology import KernelFactory, MorphologyProcessor
 from .preprocessing import ImagePreprocessor
 from .segmentation import Segmenter
 from .video import VideoAnalyzer
@@ -14,10 +16,13 @@ __all__ = [
     "FaceDetector",
     "FaceRecognizer",
     "FeatureExtractor",
+    "GeometricTransformer",
     "HumanDetector",
     "ImageLoader",
     "ImageMetadata",
     "ImagePreprocessor",
+    "KernelFactory",
+    "MorphologyProcessor",
     "Segmenter",
     "VideoAnalyzer",
 ]
